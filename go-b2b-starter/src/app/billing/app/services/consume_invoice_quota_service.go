@@ -82,7 +82,7 @@ func (s *billingService) ingestMeterEventToPolar(ctx context.Context, organizati
 	// Filter: name equals "invoice.processed"
 	// Amount: 1 (one invoice processed)
 	meterSlug := invoicesProcessedMeterSlug // Event name MUST match meter filter exactly (with dot)
-	if err := s.polarAdapter.IngestMeterEvent(ctx, externalID, meterSlug, 1); err != nil {
+	if err := s.billingProvider.IngestMeterEvent(ctx, externalID, meterSlug, 1); err != nil {
 		s.logger.Error("Failed to ingest meter event to Polar", map[string]any{
 			"organization_id": organizationID,
 			"external_id":     externalID,

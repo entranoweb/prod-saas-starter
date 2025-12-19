@@ -13,11 +13,14 @@ import (
 	polarpkg "github.com/moasq/go-b2b-starter/pkg/polar"
 )
 
+// Ensure polarAdapter implements domain.BillingProvider at compile time
+var _ domain.BillingProvider = (*polarAdapter)(nil)
+
 type polarAdapter struct {
 	client *polarpkg.Client
 }
 
-func NewPolarAdapter(client *polarpkg.Client) *polarAdapter {
+func NewPolarAdapter(client *polarpkg.Client) domain.BillingProvider {
 	return &polarAdapter{
 		client: client,
 	}

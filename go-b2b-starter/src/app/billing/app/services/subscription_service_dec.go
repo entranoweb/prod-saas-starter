@@ -71,30 +71,22 @@ type BillingService interface {
 }
 
 type billingService struct {
-	repo         domain.SubscriptionRepository
-	orgAdapter   domain.OrganizationAdapter
-	polarAdapter PolarAdapter
-	logger       logger.Logger
+	repo            domain.SubscriptionRepository
+	orgAdapter      domain.OrganizationAdapter
+	billingProvider domain.BillingProvider
+	logger          logger.Logger
 }
 
 func NewBillingService(
 	repo domain.SubscriptionRepository,
 	orgAdapter domain.OrganizationAdapter,
-	polarAdapter PolarAdapter,
+	billingProvider domain.BillingProvider,
 	logger logger.Logger,
 ) BillingService {
 	return &billingService{
-		repo:         repo,
-		orgAdapter:   orgAdapter,
-		polarAdapter: polarAdapter,
-		logger:       logger,
+		repo:            repo,
+		orgAdapter:      orgAdapter,
+		billingProvider: billingProvider,
+		logger:          logger,
 	}
-}
-
-// PolarAdapter defines the interface for Polar API operations
-type PolarAdapter interface {
-	GetSubscription(ctx context.Context, externalCustomerID string) (*domain.Subscription, error)
-	GetCheckoutSession(ctx context.Context, sessionID string) (*domain.CheckoutSessionResponse, error)
-	GetCheckoutSessionWithPolling(ctx context.Context, sessionID string) (*domain.CheckoutSessionResponse, error)
-	IngestMeterEvent(ctx context.Context, externalCustomerID string, meterSlug string, amount int32) error
 }

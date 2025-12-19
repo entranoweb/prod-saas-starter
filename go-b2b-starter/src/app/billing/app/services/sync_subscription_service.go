@@ -17,7 +17,7 @@ func (s *billingService) SyncSubscriptionFromPolar(ctx context.Context, organiza
 	}
 
 	// Fetch subscription from Polar
-	subscription, err := s.polarAdapter.GetSubscription(ctx, externalID)
+	subscription, err := s.billingProvider.GetSubscription(ctx, externalID)
 	if err != nil {
 		return fmt.Errorf("failed to fetch subscription from Polar: %w", err)
 	}

@@ -34,8 +34,8 @@ func (m *Module) Configure(container *dig.Container) error {
 		return err
 	}
 
-	// Register PolarAdapter
-	if err := container.Provide(func(client *polarpkg.Client) PolarAdapter {
+	// Register BillingProvider (Polar implementation)
+	if err := container.Provide(func(client *polarpkg.Client) domain.BillingProvider {
 		return polar.NewPolarAdapter(client)
 	}); err != nil {
 		return err
@@ -45,10 +45,10 @@ func (m *Module) Configure(container *dig.Container) error {
 	if err := container.Provide(func(
 		repo domain.SubscriptionRepository,
 		orgAdapter domain.OrganizationAdapter,
-		polarAdapter PolarAdapter,
+		billingProvider domain.BillingProvider,
 		logger logger.Logger,
 	) BillingService {
-		return NewBillingService(repo, orgAdapter, polarAdapter, logger)
+		return NewBillingService(repo, orgAdapter, billingProvider, logger)
 	}); err != nil {
 		return err
 	}

@@ -11,7 +11,7 @@ import (
 
 func (s *billingService) VerifyPaymentFromCheckout(ctx context.Context, sessionID string) (*domain.BillingStatus, error) {
 	// Step 1: Get checkout session from Polar with polling
-	checkoutSession, err := s.polarAdapter.GetCheckoutSessionWithPolling(ctx, sessionID)
+	checkoutSession, err := s.billingProvider.GetCheckoutSessionWithPolling(ctx, sessionID)
 	if err != nil {
 		fmt.Printf("❌ [VerifyPayment] Failed to verify checkout session %s: %v\n", sessionID, err)
 		return nil, fmt.Errorf("failed to get checkout session: %w", err)
@@ -42,7 +42,7 @@ func (s *billingService) VerifyPaymentFromCheckout(ctx context.Context, sessionI
 	}
 
 	// Step 5: Fetch full subscription details from Polar
-	subscription, err := s.polarAdapter.GetSubscription(ctx, externalCustomerID)
+	subscription, err := s.billingProvider.GetSubscription(ctx, externalCustomerID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch subscription from Polar: %w", err)
 	}

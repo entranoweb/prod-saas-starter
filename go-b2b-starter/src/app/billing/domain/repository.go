@@ -23,3 +23,12 @@ type OrganizationAdapter interface {
 	GetStytchOrgID(ctx context.Context, organizationID int32) (string, error)
 	GetOrganizationIDByStytchOrgID(ctx context.Context, stytchOrgID string) (int32, error)
 }
+
+// BillingProvider defines operations for external billing providers
+// This interface abstracts the billing provider (e.g., Polar.sh) from the app layer
+type BillingProvider interface {
+	GetSubscription(ctx context.Context, externalCustomerID string) (*Subscription, error)
+	GetCheckoutSession(ctx context.Context, sessionID string) (*CheckoutSessionResponse, error)
+	GetCheckoutSessionWithPolling(ctx context.Context, sessionID string) (*CheckoutSessionResponse, error)
+	IngestMeterEvent(ctx context.Context, externalCustomerID string, meterSlug string, amount int32) error
+}
