@@ -1,8 +1,6 @@
 module github.com/moasq/go-b2b-starter
 
-go 1.23.0
-
-toolchain go1.24.7
+go 1.25
 
 require (
 	github.com/KyleBanks/depth v1.2.1
