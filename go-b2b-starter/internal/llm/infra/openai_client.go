@@ -14,7 +14,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/moasq/go-b2b-starter/internal/llm/domain"
@@ -62,25 +61,21 @@ func NewCircuitBreaker(maxFailures int, resetTimeout time.Duration) *CircuitBrea
 
 // CanExecute checks if a request can be executed based on circuit breaker state
 func (cb *CircuitBreaker) CanExecute() bool {
-	cb.mu.RLock()
-	defer cb.mu.RUnlock()
-	
+	cb.mu.Lock()
+	defer cb.mu.Unlock()
+
 	if cb.state == "closed" {
 		return true
 	}
-	
+
 	if cb.state == "open" {
 		if time.Since(cb.lastFailureTime) > cb.resetTimeout {
-			cb.mu.RUnlock()
-			cb.mu.Lock()
 			cb.state = "half-open"
-			cb.mu.Unlock()
-			cb.mu.RLock()
 			return true
 		}
 		return false
 	}
-	
+
 	// half-open state - allow one request to test
 	return true
 }
@@ -89,11 +84,11 @@ func (cb *CircuitBreaker) CanExecute() bool {
 func (cb *CircuitBreaker) RecordSuccess() {
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
-	
-	atomic.AddInt64(&cb.successCount, 1)
+
+	cb.successCount++
 	if cb.state == "half-open" {
 		cb.state = "closed"
-		atomic.StoreInt64(&cb.failureCount, 0)
+		cb.failureCount = 0
 	}
 }
 
@@ -101,11 +96,11 @@ func (cb *CircuitBreaker) RecordSuccess() {
 func (cb *CircuitBreaker) RecordFailure() {
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
-	
-	atomic.AddInt64(&cb.failureCount, 1)
+
+	cb.failureCount++
 	cb.lastFailureTime = time.Now()
-	
-	if int(atomic.LoadInt64(&cb.failureCount)) >= cb.maxFailures {
+
+	if cb.failureCount >= int64(cb.maxFailures) {
 		cb.state = "open"
 	}
 }
@@ -114,12 +109,12 @@ func (cb *CircuitBreaker) RecordFailure() {
 func (cb *CircuitBreaker) GetStats() map[string]interface{} {
 	cb.mu.RLock()
 	defer cb.mu.RUnlock()
-	
+
 	return map[string]interface{}{
-		"state":         cb.state,
-		"failures":      atomic.LoadInt64(&cb.failureCount),
-		"successes":     atomic.LoadInt64(&cb.successCount),
-		"last_failure":  cb.lastFailureTime,
+		"state":        cb.state,
+		"failures":     cb.failureCount,
+		"successes":    cb.successCount,
+		"last_failure": cb.lastFailureTime,
 	}
 }
 

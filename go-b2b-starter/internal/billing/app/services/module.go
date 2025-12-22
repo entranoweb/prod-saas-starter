@@ -35,8 +35,8 @@ func (m *Module) Configure(container *dig.Container) error {
 	}
 
 	// Register BillingProvider (Polar implementation)
-	if err := container.Provide(func(client *polarpkg.Client) domain.BillingProvider {
-		return polar.NewPolarAdapter(client)
+	if err := container.Provide(func(client *polarpkg.Client, log logger.Logger) domain.BillingProvider {
+		return polar.NewPolarAdapter(client, log)
 	}); err != nil {
 		return err
 	}

@@ -1,17 +1,18 @@
 package billing
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/moasq/go-b2b-starter/internal/auth"
 	billingServices "github.com/moasq/go-b2b-starter/internal/billing/app/services"
 	"github.com/moasq/go-b2b-starter/internal/billing/domain"
-	"github.com/moasq/go-b2b-starter/internal/auth"
-	"github.com/moasq/go-b2b-starter/pkg/httperr"
 	"github.com/moasq/go-b2b-starter/internal/logger"
+	"github.com/moasq/go-b2b-starter/pkg/httperr"
 )
 
 type Handler struct {
@@ -133,7 +134,7 @@ func (h *Handler) VerifyPayment(c *gin.Context) {
 	billingStatus, err := h.billingService.VerifyPaymentFromCheckout(c.Request.Context(), req.SessionID)
 	if err != nil {
 		// Check if it's a checkout session not found error
-		if err.Error() == "checkout session not found: "+req.SessionID {
+		if errors.Is(err, domain.ErrCheckoutSessionNotFound) {
 			h.logger.Warn("[VerifyPayment] Checkout session not found", map[string]any{
 				"session_id": req.SessionID,
 			})

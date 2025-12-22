@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/moasq/go-b2b-starter/internal/documents/domain"
 	"github.com/moasq/go-b2b-starter/internal/documents/domain/events"
@@ -80,8 +81,18 @@ func (s *documentService) UploadDocument(ctx context.Context, orgID int32, req *
 
 	// Process document asynchronously (extract text)
 	go func() {
-		processCtx := context.Background()
-		s.ProcessDocument(processCtx, orgID, createdDoc.ID)
+		// Create a new context with timeout for background processing
+		// Don't use request context as it will be cancelled when request completes
+		processCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		defer cancel()
+
+		if _, err := s.ProcessDocument(processCtx, orgID, createdDoc.ID); err != nil {
+			s.logger.Error("background document processing failed", loggerdomain.Fields{
+				"document_id":     createdDoc.ID,
+				"organization_id": orgID,
+				"error":           err.Error(),
+			})
+		}
 	}()
 
 	return createdDoc, nil

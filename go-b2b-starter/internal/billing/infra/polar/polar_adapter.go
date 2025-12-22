@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/moasq/go-b2b-starter/internal/billing/domain"
+	"github.com/moasq/go-b2b-starter/internal/logger"
+	loggerdomain "github.com/moasq/go-b2b-starter/internal/logger/domain"
 	polarpkg "github.com/moasq/go-b2b-starter/internal/polar"
 )
 
@@ -18,11 +20,13 @@ var _ domain.BillingProvider = (*polarAdapter)(nil)
 
 type polarAdapter struct {
 	client *polarpkg.Client
+	logger logger.Logger
 }
 
-func NewPolarAdapter(client *polarpkg.Client) domain.BillingProvider {
+func NewPolarAdapter(client *polarpkg.Client, log logger.Logger) domain.BillingProvider {
 	return &polarAdapter{
 		client: client,
+		logger: log,
 	}
 }
 
@@ -91,9 +95,14 @@ func (p *polarAdapter) GetSubscription(ctx context.Context, externalCustomerID s
 		}
 	}
 
-	// Console log for Polar API response
-	fmt.Printf("🌐 POLAR API SYNC - Customer: %s | Subscription: %s | Invoice Count: %d | Status: %s | Product: %s\n",
-		externalCustomerID, polarSub.ID, invoiceCountMax, polarSub.Status, polarSub.Product.Name)
+	// Log subscription sync
+	p.logger.Info("polar subscription sync completed", loggerdomain.Fields{
+		"customer_id":       externalCustomerID,
+		"subscription_id":   polarSub.ID,
+		"invoice_count_max": invoiceCountMax,
+		"status":            polarSub.Status,
+		"product_name":      polarSub.Product.Name,
+	})
 
 	// Create domain subscription (organizationID will be set by caller)
 	subscription := &domain.Subscription{
@@ -127,7 +136,7 @@ func (p *polarAdapter) GetCheckoutSession(ctx context.Context, sessionID string)
 	defer resp.Body.Close()
 
 	if resp.StatusCode == 404 {
-		return nil, fmt.Errorf("checkout session not found: %s", sessionID)
+		return nil, fmt.Errorf("%w: %s", domain.ErrCheckoutSessionNotFound, sessionID)
 	}
 
 	if resp.StatusCode != 200 {
@@ -168,9 +177,14 @@ func (p *polarAdapter) GetCheckoutSession(ctx context.Context, sessionID string)
 		externalCustomerID = result.Customer.ExternalID
 	}
 
-	// Console log for checkout session retrieval
-	fmt.Printf("🔍 POLAR CHECKOUT SESSION - ID: %s | Status: %s | ExternalCustomerID: %s | CustomerID: %s | Subscription: %s\n",
-		result.ID, result.Status, externalCustomerID, result.CustomerID, result.Subscription.ID)
+	// Log checkout session retrieval
+	p.logger.Info("polar checkout session retrieved", loggerdomain.Fields{
+		"session_id":           result.ID,
+		"status":               result.Status,
+		"external_customer_id": externalCustomerID,
+		"customer_id":          result.CustomerID,
+		"subscription_id":      result.Subscription.ID,
+	})
 
 	// Create domain checkout session response
 	checkoutSession := &domain.CheckoutSessionResponse{
@@ -208,12 +222,19 @@ func (p *polarAdapter) GetCheckoutSessionWithPolling(ctx context.Context, sessio
 
 	// Log initial status
 	if err == nil {
-		fmt.Printf("🔄 [Polar Polling] Initial status: %s, will poll for %v\n", session.Status, maxDuration)
+		p.logger.Debug("polar checkout polling started", loggerdomain.Fields{
+			"session_id":   sessionID,
+			"status":       session.Status,
+			"max_duration": maxDuration.String(),
+		})
 	} else if !isRetryableError(err) {
 		// Non-retryable error (e.g., 404) - fail immediately
 		return nil, err
 	} else {
-		fmt.Printf("⚠️  [Polar Polling] Initial attempt failed: %v, will retry\n", err)
+		p.logger.Debug("polar checkout initial attempt failed, will retry", loggerdomain.Fields{
+			"session_id": sessionID,
+			"error":      err.Error(),
+		})
 	}
 
 	// Polling loop
@@ -227,9 +248,16 @@ func (p *polarAdapter) GetCheckoutSessionWithPolling(ctx context.Context, sessio
 			session, err := p.GetCheckoutSession(ctx, sessionID)
 
 			if err == nil {
-				fmt.Printf("🔄 [Polar Polling] Attempt %d: status=%s\n", attemptCount, session.Status)
+				p.logger.Debug("polar checkout polling attempt", loggerdomain.Fields{
+					"session_id": sessionID,
+					"attempt":    attemptCount,
+					"status":     session.Status,
+				})
 				if session.Status == "succeeded" {
-					fmt.Printf("✅ [Polar Polling] Success after %d attempts\n", attemptCount)
+					p.logger.Info("polar checkout polling succeeded", loggerdomain.Fields{
+						"session_id": sessionID,
+						"attempts":   attemptCount,
+					})
 					return session, nil
 				}
 				// Continue polling for "pending", "processing", etc.
@@ -238,11 +266,19 @@ func (p *polarAdapter) GetCheckoutSessionWithPolling(ctx context.Context, sessio
 
 			// Check if error is retryable
 			if !isRetryableError(err) {
-				fmt.Printf("❌ [Polar Polling] Non-retryable error: %v\n", err)
+				p.logger.Warn("polar checkout polling non-retryable error", loggerdomain.Fields{
+					"session_id": sessionID,
+					"attempt":    attemptCount,
+					"error":      err.Error(),
+				})
 				return nil, err
 			}
 
-			fmt.Printf("⚠️  [Polar Polling] Attempt %d failed (retryable): %v\n", attemptCount, err)
+			p.logger.Debug("polar checkout polling attempt failed, retrying", loggerdomain.Fields{
+				"session_id": sessionID,
+				"attempt":    attemptCount,
+				"error":      err.Error(),
+			})
 		}
 	}
 
@@ -251,7 +287,11 @@ func (p *polarAdapter) GetCheckoutSessionWithPolling(ctx context.Context, sessio
 	if session != nil {
 		lastStatus = session.Status
 	}
-	fmt.Printf("⏱️  [Polar Polling] Timeout after %d attempts (10s), last status: %s\n", attemptCount, lastStatus)
+	p.logger.Warn("polar checkout polling timeout", loggerdomain.Fields{
+		"session_id":  sessionID,
+		"attempts":    attemptCount,
+		"last_status": lastStatus,
+	})
 	return nil, fmt.Errorf("checkout verification timed out after 10 seconds (last status: %s)", lastStatus)
 }
 
@@ -307,9 +347,12 @@ func (p *polarAdapter) IngestMeterEvent(ctx context.Context, externalCustomerID 
 		},
 	}
 
-	// Log the exact payload being sent to Polar for debugging
+	// Log the payload being sent to Polar for debugging
 	bodyJSON, _ := json.Marshal(body)
-	fmt.Printf("📤 SENDING TO POLAR - POST %s\nPayload: %s\n", endpoint, string(bodyJSON))
+	p.logger.Debug("sending meter event to polar", loggerdomain.Fields{
+		"endpoint": endpoint,
+		"payload":  string(bodyJSON),
+	})
 
 	resp, err := p.client.Post(ctx, endpoint, body)
 	if err != nil {
@@ -322,9 +365,12 @@ func (p *polarAdapter) IngestMeterEvent(ctx context.Context, externalCustomerID 
 		return fmt.Errorf("polar events API returned status %d: %s", resp.StatusCode, string(bodyBytes))
 	}
 
-	// Console log for successful event ingestion
-	fmt.Printf("✅ EVENT INGESTED - Customer: %s | Event: %s | Amount: %d | Polar meters will aggregate\n",
-		externalCustomerID, meterSlug, amount)
+	// Log successful event ingestion
+	p.logger.Info("meter event ingested successfully", loggerdomain.Fields{
+		"customer_id": externalCustomerID,
+		"meter_slug":  meterSlug,
+		"amount":      amount,
+	})
 
 	return nil
 }

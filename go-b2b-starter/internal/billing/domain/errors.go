@@ -23,4 +23,7 @@ var (
 
 	// ErrQuotaDataStale is returned when quota data hasn't been synced recently
 	ErrQuotaDataStale = errors.New("quota data is stale")
+
+	// ErrCheckoutSessionNotFound is returned when a checkout session cannot be found
+	ErrCheckoutSessionNotFound = errors.New("checkout session not found")
 )
